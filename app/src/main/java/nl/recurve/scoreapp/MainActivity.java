@@ -77,7 +77,6 @@ dateInput.setOnClickListener(v -> {
     dialog.show();
 });
 
-});
   root.addView(label("Namen van de schutters",18,true));
   for(int i=0;i<4;i++){final int k=i;EditText n=new EditText(this);n.setSingleLine();n.setHint("Naam schutter "+(i+1));n.setText(p.getString("name"+i,""));root.addView(n,new LinearLayout.LayoutParams(-1,dp(46)));names[i]=n;n.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){} public void onTextChanged(CharSequence s,int st,int before,int count){p.edit().putString("name"+k,s.toString()).apply();leaderboard();labels();}public void afterTextChanged(Editable e){}});}
   root.addView(label("Scores invoeren",18,true));picker=new Spinner(this);root.addView(picker,lp());labels();picker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){public void onItemSelected(AdapterView<?> a,View v,int pos,long id){if(selected!=pos){selected=pos;show(pos);}}public void onNothingSelected(AdapterView<?> a){}});
