@@ -63,7 +63,57 @@ root.addView(export, lp());root.addView(label("Klassement",18,true));rank=new Te
  void labels(){if(picker==null)return;String[] a=new String[4];for(int i=0;i<4;i++){String n=names[i]==null?"":names[i].getText().toString().trim();a[i]="Schutter "+(i+1)+(n.isEmpty()?"":" – "+n);}ArrayAdapter<String> ad=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,a);ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);picker.setAdapter(ad);picker.setSelection(selected);}
  TextView cell(String s,boolean head){TextView t=new TextView(this);t.setText(s);t.setTextSize(head?12:15);t.setGravity(17);t.setPadding(dp(2),dp(7),dp(2),dp(7));t.setBackgroundColor(head?pale:Color.WHITE);if(head)t.setTypeface(null,1);return t;}
  void show(int s){loading=true;body.removeAllViews();for(int turn=0;turn<4;turn++){body.addView(label("Beurt "+(turn+1),18,true));TableLayout tab=new TableLayout(this);tab.setStretchAllColumns(true);TableRow h=new TableRow(this);for(String z:new String[]{"End","Pijl 1","Pijl 2","Pijl 3","Totaal"})h.addView(cell(z,true));tab.addView(h);
-  for(int e=0;e<4;e++){int ix=turn*4+e;TableRow row=new TableRow(this);row.addView(cell(""+(e+1),false));for(int a=0;a<3;a++){final int ar=a;EditText in=new EditText(this);in.setSingleLine();in.setTextSize(15);in.setGravity(17);in.setPadding(0,0,0,0);in.setHint("–");in.setInputType( android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);in.setFilters(new InputFilter[]{new InputFilter.LengthFilter(2)});in.setBackgroundColor(Color.WHITE);in.setText(p.getString(key(s,ix,a),""));inputs[s][ix][a]=in;in.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence q,int st,int c,int af){}public void onTextChanged(CharSequence q,int st,int before,int count){if(loading)return;String v=q.toString().trim().toUpperCase(Locale.ROOT);p.edit().putString(key(s,ix,ar),v).apply();in.setError(valid(v)?"": "Gebruik 0–10 of X");totals(s);leaderboard();}public void afterTextChanged(Editable e){}});row.addView(in,new TableRow.LayoutParams(0,dp(44),1));}ends[s][ix]=cell("0",false);row.addView(ends[s][ix]);tab.addView(row);}body.addView(tab);turns[s][turn]=label("Totaal beurt "+(turn+1)+": 0 / 120",16,true);turns[s][turn].setGravity(Gravity.RIGHT);body.addView(turns[s][turn]);}
+  for(int e=0;e<4;e++){int ix=turn*4+e;TableRow row=new TableRow(this);row.addView(cell(""+(e+1),false));for(int a=0;a<3;a++){
+  final int ar = a;
+
+Spinner in = new Spinner(this);
+String[] options = {"–", "X", "10", "9", "8", "7", "6",
+                    "5", "4", "3", "2", "1", "0", "M"};
+
+ArrayAdapter<String> adapter = new ArrayAdapter<>(
+    this, android.R.layout.simple_spinner_item, options);
+adapter.setDropDownViewResource(
+    android.R.layout.simple_spinner_dropdown_item);
+in.setAdapter(adapter);
+
+String saved = p.getString(key(s, ix, a), "");
+int pos = 0;
+for (int j = 0; j < options.length; j++) {
+    if (options[j].equalsIgnoreCase(saved)) {
+        pos = j;
+        break;
+    }
+}
+in.setSelection(pos);
+inputs[s][ix][a] = null;
+
+in.setOnItemSelectedListener(
+    new android.widget.AdapterView.OnItemSelectedListener() {
+        boolean first = true;
+
+        @Override
+        public void onItemSelected(
+                android.widget.AdapterView<?> parent,
+                View view, int position, long id) {
+            if (first) {
+                first = false;
+                return;
+            }
+
+            String value = options[position];
+            if (value.equals("–")) value = "";
+
+            p.edit().putString(key(s, ix, ar), value).apply();
+            totals(s);
+            leaderboard();
+        }
+
+        @Override
+        public void onNothingSelected(
+                android.widget.AdapterView<?> parent) {}
+    });
+
+row.addView(in, new TableRow.LayoutParams(0, dp(44), 1));}ends[s][ix]=cell("0",false);row.addView(ends[s][ix]);tab.addView(row);}body.addView(tab);turns[s][turn]=label("Totaal beurt "+(turn+1)+": 0 / 120",16,true);turns[s][turn].setGravity(Gravity.RIGHT);body.addView(turns[s][turn]);}
   grands[s]=label("EINDTOTAAL: 0 / 480",20,true);grands[s].setGravity(17);grands[s].setBackgroundColor(pale);body.addView(grands[s]);loading=false;totals(s);
  }
  boolean valid(String v){if(v.isEmpty()||v.equals("X"))return true;try{int n=Integer.parseInt(v);return n>=0&&n<=10;}catch(Exception e){return false;}}
