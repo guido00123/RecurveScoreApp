@@ -121,8 +121,50 @@ row.addView(in, new TableRow.LayoutParams(0, dp(44), 1));}ends[s][ix]=cell("0",f
  int val(String v){if(v.equalsIgnoreCase("X"))return 10;try{int n=Integer.parseInt(v);return n>=0&&n<=10?n:0;}catch(Exception e){return 0;}}
  int score(int s){int sum=0;for(int e=0;e<16;e++)for(int a=0;a<3;a++)sum+=val(p.getString(key(s,e,a),""));return sum;}
  void totals(int s){int all=0;for(int t=0;t<4;t++){int ts=0;for(int e=t*4;e<t*4+4;e++){int es=0;for(int a=0;a<3;a++)es+=val(p.getString(key(s,e,a),""));if(ends[s][e]!=null)ends[s][e].setText(""+es);ts+=es;}if(turns[s][t]!=null)turns[s][t].setText("Totaal beurt "+(t+1)+": "+ts+" / 120");all+=ts;}if(grands[s]!=null)grands[s].setText("EINDTOTAAL: "+all+" / 480");}
- void leaderboard(){if(rank==null)return;Integer[] order={0,1,2,3};Arrays.sort(order,(a,b)->Integer.compare(score(b),score(a)));StringBuilder b=new StringBuilder();for(int i=0;i<4;i++){int s=order[i];String n=names[s]==null?"":names[s].getText().toString().trim();if(n.isEmpty())n="Schutter "+(s+1);b.append(i+1).append(". ").append(n).append(" — ").append(score(s)).append(" / 480");if(i<3)b.append("\n");}rank.setText(b.toString());}
+ 
+void leaderboard() {
+    if (rank == null) return;
 
+    StringBuilder b = new StringBuilder();
+
+    b.append(String.format(Locale.ROOT,
+        "%-12s %4s %4s %4s %4s %5s\n",
+        "Schutter", "B1", "B2", "B3", "B4", "Totaal"));
+
+    for (int s = 0; s < 4; s++) {
+        String n = names[s] == null ? "" :
+            names[s].getText().toString().trim();
+
+        if (n.isEmpty()) n = "Schutter " + (s + 1);
+        if (n.length() > 12) n = n.substring(0, 12);
+
+        int[] beurt = new int[4];
+
+        for (int t = 0; t < 4; t++) {
+            for (int e = t * 4; e < t * 4 + 4; e++) {
+                for (int a = 0; a < 3; a++) {
+                    beurt[t] += val(
+                        p.getString(key(s, e, a), "")
+                    );
+                }
+            }
+        }
+
+        b.append(String.format(Locale.ROOT,
+            "%-12s %4d %4d %4d %4d %5d\n",
+            n,
+            beurt[0],
+            beurt[1],
+            beurt[2],
+            beurt[3],
+            beurt[0] + beurt[1] + beurt[2] + beurt[3]
+        ));
+    }
+
+    rank.setTypeface(android.graphics.Typeface.MONOSPACE);
+    rank.setTextSize(13);
+    rank.setText(b.toString());
+}
 @Override
 protected void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
