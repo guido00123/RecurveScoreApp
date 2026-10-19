@@ -27,21 +27,56 @@ EditText dateInput;
   ScrollView sc=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(1);root.setPadding(dp(14),dp(12),dp(14),dp(24));root.setBackgroundColor(0xfff8fafc);sc.addView(root);setContentView(sc);
   TextView title=label("🏹 Recurve Score",26,true);title.setGravity(17);root.addView(title);
   TextView sub=new TextView(this);sub.setText("4 schutters • 4 beurten • 4 ends • 3 pijlen");sub.setGravity(17);root.addView(sub);
-  root.addView(label("Datum wedstrijd",18,true));
+  
+root.addView(label("Datum wedstrijd", 18, true));
 
 dateInput = new EditText(this);
 dateInput.setSingleLine();
-dateInput.setHint("dd-mm-jjjj");
-dateInput.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
-dateInput.setText(p.getString("wedstrijd_datum",""));
+dateInput.setHint("Kies de wedstrijddatum");
 dateInput.setTextSize(16);
+dateInput.setFocusable(false);
+dateInput.setClickable(true);
+dateInput.setCompoundDrawablesWithIntrinsicBounds(
+    0, 0, android.R.drawable.ic_menu_my_calendar, 0
+);
+
+dateInput.setText(p.getString("wedstrijd_datum", ""));
 root.addView(dateInput, new LinearLayout.LayoutParams(-1, dp(48)));
 
-dateInput.addTextChangedListener(new TextWatcher() {
-    public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
-    public void onTextChanged(CharSequence s,int start,int before,int count) {
-        p.edit().putString("wedstrijd_datum",s.toString()).apply();
+dateInput.setOnClickListener(v -> {
+    java.util.Calendar cal = java.util.Calendar.getInstance();
+
+    String saved = p.getString("wedstrijd_datum", "");
+    try {
+        java.text.SimpleDateFormat fmt =
+            new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.ROOT);
+        fmt.setLenient(false);
+        java.util.Date date = fmt.parse(saved);
+        if (date != null) cal.setTime(date);
+    } catch (Exception ignored) {
     }
+
+    android.app.DatePickerDialog dialog =
+        new android.app.DatePickerDialog(
+            this,
+            (view, year, month, dayOfMonth) -> {
+                String datum = String.format(
+                    java.util.Locale.ROOT,
+                    "%02d-%02d-%04d",
+                    dayOfMonth, month + 1, year
+                );
+
+                dateInput.setText(datum);
+                p.edit().putString("wedstrijd_datum", datum).apply();
+            },
+            cal.get(java.util.Calendar.YEAR),
+            cal.get(java.util.Calendar.MONTH),
+            cal.get(java.util.Calendar.DAY_OF_MONTH)
+        );
+
+    dialog.show();
+});
+
     public void afterTextChanged(Editable e) {}
 });
   root.addView(label("Namen van de schutters",18,true));
