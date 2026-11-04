@@ -243,11 +243,22 @@ public class MainActivity extends Activity {
         body.setOrientation(1);
         root.addView(body, lp());
 
-        Button exportPdf = createStyledButton("📄 Exporteer als PDF", navyColor, Color.WHITE);
-        LinearLayout.LayoutParams bLp = lp();
-        bLp.setMargins(0, dp(10), 0, dp(10));
+        // Knoppen voor Excel en PDF export
+        LinearLayout exportRow = new LinearLayout(this);
+        exportRow.setOrientation(0);
+        LinearLayout.LayoutParams eLp1 = new LinearLayout.LayoutParams(0, -2, 1);
+        eLp1.setMargins(0, dp(10), dp(4), dp(5));
+        LinearLayout.LayoutParams eLp2 = new LinearLayout.LayoutParams(0, -2, 1);
+        eLp2.setMargins(dp(4), dp(10), 0, dp(5));
+
+        Button exportExcel = createStyledButton("📊 Excel", navyColor, Color.WHITE);
+        exportExcel.setOnClickListener(v -> triggerExcelExport());
+        exportRow.addView(exportExcel, eLp1);
+
+        Button exportPdf = createStyledButton("📄 PDF", navyColor, Color.WHITE);
         exportPdf.setOnClickListener(v -> triggerPdfExport());
-        root.addView(exportPdf, bLp);
+        exportRow.addView(exportPdf, eLp2);
+        root.addView(exportRow);
 
         Button shareBtn = createStyledButton("📲 Deel Resultaten via WhatsApp/Mail", Color.parseColor("#25D366"), Color.WHITE);
         LinearLayout.LayoutParams shLp = lp();
@@ -495,7 +506,6 @@ public class MainActivity extends Activity {
     void updateLeaderboard() {
         if (rankView == null) return;
         StringBuilder sb = new StringBuilder();
-        // Duidelijke koptekst voor het overzicht per schutter en per beurt
         sb.append(String.format(Locale.ROOT, "%-10s | B1 | B2 | B3 | B4 | TOTAAL\n", "Schutter"));
         sb.append("--------------------------------------------\n");
 
@@ -504,7 +514,6 @@ public class MainActivity extends Activity {
             if (name.length() > 9) name = name.substring(0, 9);
 
             int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
-            // Wedstrijdbeurten lopen van t = 2 t/m 5
             for (int e = 8; e < 12; e++) for (int a = 0; a < 3; a++) b1 += parseVal(getArrowScore(s, e, a));
             for (int e = 12; e < 16; e++) for (int a = 0; a < 3; a++) b2 += parseVal(getArrowScore(s, e, a));
             for (int e = 16; e < 20; e++) for (int a = 0; a < 3; a++) b3 += parseVal(getArrowScore(s, e, a));
@@ -518,29 +527,78 @@ public class MainActivity extends Activity {
         rankView.setText(sb.toString());
     }
 
+    int exportRequestCode = 2001;
+
+    void triggerExcelExport() {
+        exportRequestCode = 2001;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/vnd.ms-excel");
+        intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.xls");
+        startActivityForResult(intent, exportRequestCode);
+    }
+
     void triggerPdfExport() {
+        exportRequestCode = 2002;
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/pdf");
         intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
-        startActivityForResult(intent, 2002);
+        startActivityForResult(intent, exportRequestCode);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 2002 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
             try {
                 OutputStream out = getContentResolver().openOutputStream(data.getData());
                 if (out != null) {
-                    writePdf(out);
+                    if (requestCode == 2001) {
+                        writeExcel(out);
+                        Toast.makeText(this, "Excel succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                    } else if (requestCode == 2002) {
+                        writePdf(out);
+                        Toast.makeText(this, "PDF succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                    }
                     out.close();
-                    Toast.makeText(this, "PDF succesvol opgeslagen!", Toast.LENGTH_LONG).show();
                 }
             } catch (Exception e) {
                 Toast.makeText(this, "Export mislukt: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         }
+    }
+
+    void writeExcel(OutputStream output) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        sb.append("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">\n");
+        sb.append("<Worksheet ss:Name=\"Scores\">\n<Table>\n");
+        
+        // Header
+        sb.append("<Row><Cell><Data ss:Type=\"String\">Schutter</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 1</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 2</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 3</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 4</Data></Cell><Cell><Data ss:Type=\"String\">Totaal</Data></Cell></Row>\n");
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+            for (int e = 8; e < 12; e++) for (int a = 0; a < 3; a++) b1 += parseVal(getArrowScore(s, e, a));
+            for (int e = 12; e < 16; e++) for (int a = 0; a < 3; a++) b2 += parseVal(getArrowScore(s, e, a));
+            for (int e = 16; e < 20; e++) for (int a = 0; a < 3; a++) b3 += parseVal(getArrowScore(s, e, a));
+            for (int e = 20; e < 24; e++) for (int a = 0; a < 3; a++) b4 += parseVal(getArrowScore(s, e, a));
+            int total = b1 + b2 + b3 + b4;
+
+            sb.append("<Row>");
+            sb.append("<Cell><Data ss:Type=\"String\">").append(name).append("</Data></Cell>");
+            sb.append("<Cell><Data ss:Type=\"Number\">").append(b1).append("</Data></Cell>");
+            sb.append("<Cell><Data ss:Type=\"Number\">").append(b2).append("</Data></Cell>");
+            sb.append("<Cell><Data ss:Type=\"Number\">").append(b3).append("</Data></Cell>");
+            sb.append("<Cell><Data ss:Type=\"Number\">").append(b4).append("</Data></Cell>");
+            sb.append("<Cell><Data ss:Type=\"Number\">").append(total).append("</Data></Cell>");
+            sb.append("</Row>\n");
+        }
+
+        sb.append("</Table>\n</Worksheet>\n</Workbook>");
+        output.write(sb.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     void shareViaIntent() {
