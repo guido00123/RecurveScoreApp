@@ -42,7 +42,6 @@ public class MainActivity extends Activity {
         super.onCreate(b);
         dbHelper = new DatabaseHelper(this);
         
-        // Lees donkere modus voorkeur uit SharedPreferences
         SharedPreferences sp = getSharedPreferences("app_prefs", 0);
         isDarkMode = sp.getBoolean("dark_mode", false);
 
@@ -263,7 +262,6 @@ public class MainActivity extends Activity {
         body.setOrientation(1);
         root.addView(body, lp());
 
-        // Actieknoppen voor Export en Delen
         LinearLayout btnLayout = new LinearLayout(this);
         btnLayout.setOrientation(0);
         LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, -2, 1);
@@ -295,7 +293,6 @@ public class MainActivity extends Activity {
         rankView.setTextColor(getTextColor());
         root.addView(rankView, lp());
 
-        // Knop om scores van deze wedstrijd te wissen
         Button clearBtn = createStyledButton("🗑️ Alle scores wissen voor deze wedstrijd", Color.parseColor("#dc2626"), Color.WHITE);
         LinearLayout.LayoutParams clLp = lp();
         clLp.setMargins(0, dp(15), 0, dp(15));
@@ -365,7 +362,6 @@ public class MainActivity extends Activity {
         nameLayout.addView(nameEdit, new LinearLayout.LayoutParams(-1, -2, 1));
         body.addView(nameLayout);
 
-        // 6 beurten (0,1 = test, 2,3,4,5 = wedstrijd)
         for (int turn = 0; turn < 6; turn++) {
             String tTitle = (turn < 2) ? "Testbeurt " + (turn + 1) : "Beurt " + (turn - 1);
             body.addView(label(tTitle, 16, true));
@@ -634,4 +630,21 @@ public class MainActivity extends Activity {
     }
 
     void writeExcel(OutputStream output) throws IOException {
-        ZipOutputStream zip =
+        ZipOutputStream zip = new ZipOutputStream(output);
+        List<String[]> detail = new ArrayList<>();
+        detail.add(new String[]{"Schutter", "Beurt", "End", "Pijl 1", "Pijl 2", "Pijl 3", "Totaal"});
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            for (int e = 0; e < 24; e++) {
+                int turn = e / 4;
+                String[] a = {getArrowScore(s, e, 0), getArrowScore(s, e, 1), getArrowScore(s, e, 2)};
+                int etot = parseVal(a[0]) + parseVal(a[1]) + parseVal(a[2]);
+                detail.add(new String[]{name, String.valueOf(turn + 1), String.valueOf((e % 4) + 1), a[0], a[1], a[2], String.valueOf(etot)});
+            }
+        }
+
+        putZip(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
+        putZip(zip, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
+        putZip(zip, "xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Scores\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+        putZip(zip, "xl/_rels/workbook.xml.rels", "<?xml version=\"1
