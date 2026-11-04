@@ -20,7 +20,6 @@ public class MainActivity extends Activity {
     DatabaseHelper dbHelper;
     long currentMatchId = -1;
     int numShooters = 4;
-    
     boolean isDarkMode = false;
 
     int navyColor = Color.rgb(31, 78, 121);
@@ -34,15 +33,12 @@ public class MainActivity extends Activity {
     int getInputTextColor() { return isDarkMode ? Color.WHITE : Color.BLACK; }
 
     LinearLayout root;
-    
+
     @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
         dbHelper = new DatabaseHelper(this);
-        
-        SharedPreferences sp = getSharedPreferences("app_prefs", 0);
-        isDarkMode = sp.getBoolean("dark_mode", false);
-
+        isDarkMode = getSharedPreferences("app_prefs", 0).getBoolean("dark_mode", false);
         showHomeView();
     }
 
@@ -54,7 +50,7 @@ public class MainActivity extends Activity {
 
     int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
     LinearLayout.LayoutParams lp() { return new LinearLayout.LayoutParams(-1, -2); }
-    
+
     TextView label(String s, int size, boolean bold) {
         TextView t = new TextView(this);
         t.setText(s);
@@ -88,24 +84,21 @@ public class MainActivity extends Activity {
         topBar.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = label("🏹 Recurve Score", 24, true);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1);
-        topBar.addView(title, titleParams);
+        topBar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
         Button themeBtn = new Button(this);
         themeBtn.setText(isDarkMode ? "☀️ Licht" : "🌙 Donker");
         themeBtn.setOnClickListener(v -> toggleTheme());
         topBar.addView(themeBtn, new LinearLayout.LayoutParams(-2, -2));
-
         root.addView(topBar);
 
         Button newMatchBtn = createStyledButton("➕ Nieuwe Wedstrijd Starten", navyColor, Color.WHITE);
-        newMatchBtn.setOnClickListener(v -> showConfigView());
         LinearLayout.LayoutParams btnLp = lp();
         btnLp.setMargins(0, dp(10), 0, dp(15));
+        newMatchBtn.setOnClickListener(v -> showConfigView());
         root.addView(newMatchBtn, btnLp);
 
         root.addView(label("Eerdere Wedstrijden", 18, true));
-
         LinearLayout historyList = new LinearLayout(this);
         historyList.setOrientation(1);
         root.addView(historyList, lp());
@@ -149,8 +142,8 @@ public class MainActivity extends Activity {
         setContentView(sc);
 
         root.addView(label("Nieuwe Wedstrijd Instellen", 22, true));
-
         root.addView(label("Aantal schutters (1 t/m 8):", 16, true));
+        
         EditText countInput = new EditText(this);
         countInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         countInput.setText("4");
@@ -159,8 +152,7 @@ public class MainActivity extends Activity {
 
         root.addView(label("Datum wedstrijd:", 16, true));
         EditText dateInput = new EditText(this);
-        String today = new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.ROOT).format(new Date());
-        dateInput.setText(today);
+        dateInput.setText(new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.ROOT).format(new Date()));
         dateInput.setTextColor(getTextColor());
         root.addView(dateInput, lp());
 
@@ -176,11 +168,9 @@ public class MainActivity extends Activity {
                 numShooters = 4;
             }
 
-            String matchDate = dateInput.getText().toString().trim();
-
             SQLiteDatabase db = dbHelper.getWritableDatabase();
             ContentValues cv = new ContentValues();
-            cv.put("date", matchDate);
+            cv.put("date", dateInput.getText().toString().trim());
             cv.put("shooters_count", numShooters);
             currentMatchId = db.insert("matches", null, cv);
 
@@ -191,7 +181,6 @@ public class MainActivity extends Activity {
                 scv.put("name", "Schutter " + (i + 1));
                 db.insert("shooters", null, scv);
             }
-
             showScoreView();
         });
         root.addView(startBtn, sLp);
@@ -223,19 +212,17 @@ public class MainActivity extends Activity {
         topBar.setGravity(Gravity.CENTER_VERTICAL);
 
         Button backHome = createStyledButton("⬅ Terug", getCardColor(), getTextColor());
-        topBar.addView(backHome, new LinearLayout.LayoutParams(-2, -2));
         backHome.setOnClickListener(v -> showHomeView());
+        topBar.addView(backHome, new LinearLayout.LayoutParams(-2, -2));
 
         TextView title = label("🏹 Invoer & Klassement", 18, true);
         title.setGravity(17);
-        LinearLayout.LayoutParams tParams = new LinearLayout.LayoutParams(0, -2, 1);
-        topBar.addView(title, tParams);
+        topBar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
 
         Button themeBtn = new Button(this);
         themeBtn.setText(isDarkMode ? "☀️" : "🌙");
         themeBtn.setOnClickListener(v -> toggleTheme());
         topBar.addView(themeBtn, new LinearLayout.LayoutParams(-2, -2));
-
         root.addView(topBar);
 
         root.addView(label("Selecteer schutter:", 16, true));
@@ -271,7 +258,6 @@ public class MainActivity extends Activity {
         bLp2.setMargins(dp(4), dp(10), 0, dp(10));
         exportPdf.setOnClickListener(v -> triggerFileExport("pdf"));
         btnLayout.addView(exportPdf, bLp2);
-
         root.addView(btnLayout);
 
         Button shareBtn = createStyledButton("📲 Deel Resultaten via WhatsApp/Mail", Color.parseColor("#25D366"), Color.WHITE);
@@ -294,7 +280,7 @@ public class MainActivity extends Activity {
         clearBtn.setOnClickListener(v -> {
             new AlertDialog.Builder(this)
                 .setTitle("Scores wissen?")
-                .setMessage("Weet je zeker dat alle ingevoerde pijlscores voor deze wedstrijd gewist moeten worden? Namen en datum blijven behouden.")
+                .setMessage("Weet je zeker dat alle ingevoerde pijlscores voor deze wedstrijd gewist moeten worden?")
                 .setNegativeButton("Annuleren", null)
                 .setPositiveButton("Wissen", (d, w) -> {
                     SQLiteDatabase db = dbHelper.getWritableDatabase();
@@ -376,7 +362,6 @@ public class MainActivity extends Activity {
                     final int ar = a;
                     final int fix = ix;
                     Spinner in = new Spinner(this);
-                    
                     in.setBackgroundColor(getInputBgColor());
 
                     String[] options = {"–", "X", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1", "0", "M"};
@@ -435,4 +420,207 @@ public class MainActivity extends Activity {
         grandViews[selectedShooter] = label("", 18, true);
         grandViews[selectedShooter].setGravity(17);
         grandViews[selectedShooter].setBackgroundColor(paleColor);
-        grandViews[selectedShooter].setTextColor(Color.rgb(
+        grandViews[selectedShooter].setTextColor(Color.rgb(31, 78, 121));
+        body.addView(grandViews[selectedShooter]);
+
+        calculateTotalsForShooter(selectedShooter);
+    }
+
+    TextView cell(String s, boolean head) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(head ? 12 : 14);
+        t.setGravity(17);
+        t.setPadding(dp(2), dp(6), dp(2), dp(6));
+        t.setBackgroundColor(head ? paleColor : getCardColor());
+        t.setTextColor(head ? Color.rgb(31, 78, 121) : getTextColor());
+        if (head) t.setTypeface(null, 1);
+        return t;
+    }
+
+    String getShooterName(int sIndex) {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT name FROM shooters WHERE match_id = ? AND shooter_index = ?", new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex)});
+        String name = "Schutter " + (sIndex + 1);
+        if (c.moveToFirst()) name = c.getString(0);
+        c.close();
+        return name;
+    }
+
+    void saveShooterName(int sIndex, String name) {
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("name", name);
+        db.update("shooters", cv, "match_id = ? AND shooter_index = ?", new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex)});
+    }
+
+    String getArrowScore(int sIndex, int endIdx, int arrowIdx) {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT score FROM scores WHERE match_id = ? AND shooter_index = ? AND end_index = ? AND arrow_index = ?",
+                new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex), String.valueOf(endIdx), String.valueOf(arrowIdx)});
+        String val = "";
+        if (c.moveToFirst()) val = c.getString(0);
+        c.close();
+        return val;
+    }
+
+    void saveArrowScore(int sIndex, int endIdx, int arrowIdx, String val) {
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("match_id", currentMatchId);
+        cv.put("shooter_index", sIndex);
+        cv.put("end_index", endIdx);
+        cv.put("arrow_index", arrowIdx);
+        cv.put("score", val);
+        db.insertWithOnConflict("scores", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    int parseVal(String v) {
+        if (v.equalsIgnoreCase("X")) return 10;
+        try { int n = Integer.parseInt(v); return (n >= 0 && n <= 10) ? n : 0; } catch (Exception e) { return 0; }
+    }
+
+    void calculateTotalsForShooter(int s) {
+        int compTotal = 0;
+        for (int t = 0; t < 6; t++) {
+            int turnSum = 0;
+            for (int e = t * 4; e < t * 4 + 4; e++) {
+                int endSum = 0;
+                for (int a = 0; a < 3; a++) {
+                    endSum += parseVal(getArrowScore(s, e, a));
+                }
+                if (endsViews[s][e] != null) endsViews[s][e].setText("" + endSum);
+                turnSum += endSum;
+            }
+            if (turnsViews[s][t] != null) {
+                String labelStr = (t < 2) ? "Totaal testbeurt " + (t + 1) + ": " : "Totaal beurt " + (t - 1) + ": ";
+                turnsViews[s][t].setText(labelStr + turnSum + " / 120");
+            }
+            if (t >= 2) compTotal += turnSum;
+        }
+        if (grandViews[s] != null) grandViews[s].setText("EINDTOTAAL: " + compTotal + " / 480");
+    }
+
+    void updateLeaderboard() {
+        if (rankView == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format(Locale.ROOT, "%-12s %5s\n", "Schutter", "Totaal"));
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            if (name.length() > 12) name = name.substring(0, 12);
+
+            int compTotal = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) {
+                        compTotal += parseVal(getArrowScore(s, e, a));
+                    }
+                }
+            }
+            sb.append(String.format(Locale.ROOT, "%-12s %5d\n", name, compTotal));
+        }
+
+        rankView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        rankView.setText(sb.toString());
+    }
+
+    String exportType = "xlsx";
+
+    void triggerFileExport(String type) {
+        exportType = type;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        if (type.equals("xlsx")) {
+            intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.xlsx");
+        } else {
+            intent.setType("application/pdf");
+            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
+        }
+        startActivityForResult(intent, 2002);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 2002 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try {
+                OutputStream out = getContentResolver().openOutputStream(data.getData());
+                if (out != null) {
+                    if (exportType.equals("xlsx")) writeExcel(out);
+                    else writePdf(out);
+                    out.close();
+                    Toast.makeText(this, "Bestand succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Export mislukt: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    void shareViaIntent() {
+        StringBuilder sb = new StringBuilder("🏹 Recurve Score Uitslag:\n\n");
+        for (int s = 0; s < numShooters; s++) {
+            int total = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
+                }
+            }
+            sb.append(getShooterName(s)).append(": ").append(total).append(" / 480 punten\n");
+        }
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, sb.toString());
+        startActivity(Intent.createChooser(shareIntent, "Deel uitslag via"));
+    }
+
+    void writePdf(OutputStream output) throws IOException {
+        PdfDocument pdf = new PdfDocument();
+        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(595, 842, 1).create();
+        PdfDocument.Page page = pdf.startPage(pageInfo);
+
+        android.graphics.Canvas canvas = page.getCanvas();
+        Paint paint = new Paint();
+        paint.setColor(Color.BLACK);
+        paint.setTextSize(14);
+
+        int y = 40;
+        canvas.drawText("Recurve Score - Wedstrijduitslag", 40, y, paint);
+        y += 30;
+
+        for (int s = 0; s < numShooters; s++) {
+            int total = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
+                }
+            }
+            canvas.drawText("Schutter: " + getShooterName(s) + " - Totaal: " + total + " / 480", 40, y, paint);
+            y += 25;
+        }
+
+        pdf.finishPage(page);
+        pdf.writeTo(output);
+        pdf.close();
+    }
+
+    void writeExcel(OutputStream output) throws IOException {
+        ZipOutputStream zip = new ZipOutputStream(output);
+        List<String[]> detail = new ArrayList<>();
+        detail.add(new String[]{"Schutter", "Beurt", "End", "Pijl 1", "Pijl 2", "Pijl 3", "Totaal"});
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            for (int e = 0; e < 24; e++) {
+                int turn = e / 4;
+                String[] a = {getArrowScore(s, e, 0), getArrowScore(s, e, 1), getArrowScore(s, e, 2)};
+                int etot = parseVal(a[0]) + parseVal(a[1]) + parseVal(a[2]);
+                detail.add(new String[]{name, String.valueOf(turn + 1), String.valueOf((e % 4) + 1), a[0], a[1], a[2], String.valueOf(etot)});
+            }
+        }
+
+        putZip(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
+        putZip(zip, "_rels/.
