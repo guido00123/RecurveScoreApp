@@ -243,7 +243,6 @@ public class MainActivity extends Activity {
         body.setOrientation(1);
         root.addView(body, lp());
 
-        // Knoppen voor Excel en PDF export
         LinearLayout exportRow = new LinearLayout(this);
         exportRow.setOrientation(0);
         LinearLayout.LayoutParams eLp1 = new LinearLayout.LayoutParams(0, -2, 1);
@@ -575,7 +574,6 @@ public class MainActivity extends Activity {
         sb.append("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">\n");
         sb.append("<Worksheet ss:Name=\"Scores\">\n<Table>\n");
         
-        // Header
         sb.append("<Row><Cell><Data ss:Type=\"String\">Schutter</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 1</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 2</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 3</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 4</Data></Cell><Cell><Data ss:Type=\"String\">Totaal</Data></Cell></Row>\n");
 
         for (int s = 0; s < numShooters; s++) {
@@ -621,26 +619,54 @@ public class MainActivity extends Activity {
 
     void writePdf(OutputStream output) throws IOException {
         PdfDocument pdf = new PdfDocument();
-        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(595, 842, 1).create();
+        // A4 landschap afmetingen (842 x 595 pixels) om voldoende ruimte te bieden voor kolommen
+        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(842, 595, 1).create();
         PdfDocument.Page page = pdf.startPage(pageInfo);
 
         android.graphics.Canvas canvas = page.getCanvas();
         Paint paint = new Paint();
         paint.setColor(Color.BLACK);
         paint.setTextSize(14);
+        paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
 
         int y = 40;
-        canvas.drawText("Recurve Score - Wedstrijduitslag", 40, y, paint);
+        canvas.drawText("Recurve Score - Gedetailleerd Wedstrijdoverzicht", 40, y, paint);
         y += 30;
 
+        // Tabelkop (Schutter + 4 Wedstrijdbeurten + Totaal)
+        paint.setTextSize(12);
+        canvas.drawText(String.format(Locale.ROOT, "%-15s | B1 (P1 P2 P3) | B2 (P1 P2 P3) | B3 (P1 P2 P3) | B4 (P1 P2 P3) | TOTAAL", "Schutter"), 40, y, paint);
+        y += 8;
+        canvas.drawText("-----------------------------------------------------------------------------------------------------------------------------------", 40, y, paint);
+        y += 20;
+
+        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+
         for (int s = 0; s < numShooters; s++) {
-            int total = 0;
+            String name = getShooterName(s);
+            if (name.length() > 14) name = name.substring(0, 14);
+
+            int compTotal = 0;
+            StringBuilder rowStr = new StringBuilder(String.format(Locale.ROOT, "%-15s | ", name));
+
+            // Loop door de 4 wedstrijdbeurten (t = 2 t/m 5)
             for (int t = 2; t < 6; t++) {
+                int turnSum = 0;
+                StringBuilder arrowsStr = new StringBuilder();
                 for (int e = t * 4; e < t * 4 + 4; e++) {
-                    for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
+                    for (int a = 0; a < 3; a++) {
+                        String score = getArrowScore(s, e, a);
+                        if (score.isEmpty()) score = "-";
+                        arrowsStr.append(score).append(" ");
+                        turnSum += parseVal(score);
+                    }
                 }
+                compTotal += turnSum;
+                rowStr.append(String.format(Locale.ROOT, "%-12s | ", arrowsStr.toString().trim()));
             }
-            canvas.drawText("Schutter: " + getShooterName(s) + " - Totaal (4 Beurten): " + total + " / 480", 40, y, paint);
+            rowStr.append(String.format(Locale.ROOT, "%3d / 480", compTotal));
+
+            canvas.drawText(rowStr.toString(), 40, y, paint);
             y += 25;
         }
 
