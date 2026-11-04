@@ -14,7 +14,6 @@ import android.graphics.Paint;
 import java.util.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.zip.*;
 
 public class MainActivity extends Activity {
     DatabaseHelper dbHelper;
@@ -236,3 +235,379 @@ public class MainActivity extends Activity {
                     selectedShooter = pos;
                     renderShooterScores();
                 }
+            }
+            public void onNothingSelected(AdapterView<?> a) {}
+        });
+
+        body = new LinearLayout(this);
+        body.setOrientation(1);
+        root.addView(body, lp());
+
+        Button exportPdf = createStyledButton("📄 Exporteer als PDF", navyColor, Color.WHITE);
+        LinearLayout.LayoutParams bLp = lp();
+        bLp.setMargins(0, dp(10), 0, dp(10));
+        exportPdf.setOnClickListener(v -> triggerPdfExport());
+        root.addView(exportPdf, bLp);
+
+        Button shareBtn = createStyledButton("📲 Deel Resultaten via WhatsApp/Mail", Color.parseColor("#25D366"), Color.WHITE);
+        LinearLayout.LayoutParams shLp = lp();
+        shLp.setMargins(0, 0, 0, dp(15));
+        shareBtn.setOnClickListener(v -> shareViaIntent());
+        root.addView(shareBtn, shLp);
+
+        root.addView(label("Klassement", 18, true));
+        rankView = new TextView(this);
+        rankView.setTextSize(13);
+        rankView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        rankView.setBackgroundColor(getCardColor());
+        rankView.setTextColor(getTextColor());
+        root.addView(rankView, lp());
+
+        Button clearBtn = createStyledButton("🗑️ Alle scores wissen voor deze wedstrijd", Color.parseColor("#dc2626"), Color.WHITE);
+        LinearLayout.LayoutParams clLp = lp();
+        clLp.setMargins(0, dp(15), 0, dp(15));
+        clearBtn.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                .setTitle("Scores wissen?")
+                .setMessage("Weet je zeker dat alle ingevoerde pijlscores voor deze wedstrijd gewist moeten worden?")
+                .setNegativeButton("Annuleren", null)
+                .setPositiveButton("Wissen", (d, w) -> {
+                    SQLiteDatabase db = dbHelper.getWritableDatabase();
+                    db.delete("scores", "match_id = ?", new String[]{String.valueOf(currentMatchId)});
+                    renderShooterScores();
+                    updateLeaderboard();
+                    Toast.makeText(this, "Alle scores zijn gewist.", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+        });
+        root.addView(clearBtn, clLp);
+
+        endsViews = new TextView[numShooters][24];
+        turnsViews = new TextView[numShooters][6];
+        grandViews = new TextView[numShooters];
+
+        renderShooterScores();
+        updateLeaderboard();
+    }
+
+    void updatePickerAdapter() {
+        if (picker == null) return;
+        String[] names = new String[numShooters];
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT name FROM shooters WHERE match_id = ? ORDER BY shooter_index", new String[]{String.valueOf(currentMatchId)});
+        int idx = 0;
+        while (c.moveToNext() && idx < numShooters) {
+            names[idx] = "Schutter " + (idx + 1) + " – " + c.getString(0);
+            idx++;
+        }
+        c.close();
+
+        ArrayAdapter<String> ad = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        picker.setAdapter(ad);
+        if (selectedShooter >= numShooters) selectedShooter = 0;
+        picker.setSelection(selectedShooter);
+    }
+
+    void renderShooterScores() {
+        body.removeAllViews();
+
+        LinearLayout nameLayout = new LinearLayout(this);
+        nameLayout.setOrientation(0);
+        nameLayout.setGravity(Gravity.CENTER_VERTICAL);
+        TextView nameLbl = label("Naam: ", 14, false);
+        EditText nameEdit = new EditText(this);
+        nameEdit.setText(getShooterName(selectedShooter));
+        nameEdit.setTextColor(getTextColor());
+        nameEdit.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+            public void onTextChanged(CharSequence s, int st, int before, int count) {
+                saveShooterName(selectedShooter, s.toString());
+                updatePickerAdapter();
+                updateLeaderboard();
+            }
+            public void afterTextChanged(Editable e) {}
+        });
+        nameLayout.addView(nameLbl, new LinearLayout.LayoutParams(-2, -2));
+        nameLayout.addView(nameEdit, new LinearLayout.LayoutParams(-1, -2, 1));
+        body.addView(nameLayout);
+
+        for (int turn = 0; turn < 6; turn++) {
+            String tTitle = (turn < 2) ? "Testbeurt " + (turn + 1) : "Beurt " + (turn - 1);
+            body.addView(label(tTitle, 16, true));
+
+            TableLayout tab = new TableLayout(this);
+            tab.setStretchAllColumns(true);
+            TableRow h = new TableRow(this);
+            for (String z : new String[]{"End", "Pijl 1", "Pijl 2", "Pijl 3", "Totaal"}) h.addView(cell(z, true));
+            tab.addView(h);
+
+            for (int e = 0; e < 4; e++) {
+                int ix = turn * 4 + e;
+                TableRow row = new TableRow(this);
+                row.addView(cell("" + (e + 1), false));
+
+                for (int a = 0; a < 3; a++) {
+                    final int ar = a;
+                    final int fix = ix;
+                    Spinner in = new Spinner(this);
+                    in.setBackgroundColor(getInputBgColor());
+
+                    String[] options = {"–", "X", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1", "0", "M"};
+                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, options) {
+                        @Override
+                        public View getView(int position, View convertView, ViewGroup parent) {
+                            View view = super.getView(position, convertView, parent);
+                            ((TextView) view).setTextColor(getInputTextColor());
+                            return view;
+                        }
+                        @Override
+                        public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                            View view = super.getDropDownView(position, convertView, parent);
+                            view.setBackgroundColor(getInputBgColor());
+                            ((TextView) view).setTextColor(getInputTextColor());
+                            return view;
+                        }
+                    };
+                    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                    in.setAdapter(adapter);
+
+                    String savedVal = getArrowScore(selectedShooter, fix, ar);
+                    int pos = 0;
+                    for (int j = 0; j < options.length; j++) {
+                        if (options[j].equalsIgnoreCase(savedVal)) { pos = j; break; }
+                    }
+                    in.setSelection(pos);
+
+                    in.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                        boolean first = true;
+                        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                            if (first) { first = false; return; }
+                            String val = options[position];
+                            if (val.equals("–")) val = "";
+                            saveArrowScore(selectedShooter, fix, ar, val);
+                            calculateTotalsForShooter(selectedShooter);
+                            updateLeaderboard();
+                        }
+                        public void onNothingSelected(AdapterView<?> parent) {}
+                    });
+
+                    row.addView(in, new TableRow.LayoutParams(0, dp(42), 1));
+                }
+
+                endsViews[selectedShooter][ix] = cell("0", false);
+                row.addView(endsViews[selectedShooter][ix]);
+                tab.addView(row);
+            }
+            body.addView(tab);
+
+            turnsViews[selectedShooter][turn] = label("", 14, true);
+            turnsViews[selectedShooter][turn].setGravity(Gravity.RIGHT);
+            body.addView(turnsViews[selectedShooter][turn]);
+        }
+
+        grandViews[selectedShooter] = label("", 18, true);
+        grandViews[selectedShooter].setGravity(17);
+        grandViews[selectedShooter].setBackgroundColor(paleColor);
+        grandViews[selectedShooter].setTextColor(Color.rgb(31, 78, 121));
+        body.addView(grandViews[selectedShooter]);
+
+        calculateTotalsForShooter(selectedShooter);
+    }
+
+    TextView cell(String s, boolean head) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(head ? 12 : 14);
+        t.setGravity(17);
+        t.setPadding(dp(2), dp(6), dp(2), dp(6));
+        t.setBackgroundColor(head ? paleColor : getCardColor());
+        t.setTextColor(head ? Color.rgb(31, 78, 121) : getTextColor());
+        if (head) t.setTypeface(null, 1);
+        return t;
+    }
+
+    String getShooterName(int sIndex) {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT name FROM shooters WHERE match_id = ? AND shooter_index = ?", new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex)});
+        String name = "Schutter " + (sIndex + 1);
+        if (c.moveToFirst()) name = c.getString(0);
+        c.close();
+        return name;
+    }
+
+    void saveShooterName(int sIndex, String name) {
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("name", name);
+        db.update("shooters", cv, "match_id = ? AND shooter_index = ?", new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex)});
+    }
+
+    String getArrowScore(int sIndex, int endIdx, int arrowIdx) {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        Cursor c = db.rawQuery("SELECT score FROM scores WHERE match_id = ? AND shooter_index = ? AND end_index = ? AND arrow_index = ?",
+                new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex), String.valueOf(endIdx), String.valueOf(arrowIdx)});
+        String val = "";
+        if (c.moveToFirst()) val = c.getString(0);
+        c.close();
+        return val;
+    }
+
+    void saveArrowScore(int sIndex, int endIdx, int arrowIdx, String val) {
+        SQLiteDatabase db = dbHelper.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("match_id", currentMatchId);
+        cv.put("shooter_index", sIndex);
+        cv.put("end_index", endIdx);
+        cv.put("arrow_index", arrowIdx);
+        cv.put("score", val);
+        db.insertWithOnConflict("scores", null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    int parseVal(String v) {
+        if (v.equalsIgnoreCase("X")) return 10;
+        try { int n = Integer.parseInt(v); return (n >= 0 && n <= 10) ? n : 0; } catch (Exception e) { return 0; }
+    }
+
+    void calculateTotalsForShooter(int s) {
+        int compTotal = 0;
+        for (int t = 0; t < 6; t++) {
+            int turnSum = 0;
+            for (int e = t * 4; e < t * 4 + 4; e++) {
+                int endSum = 0;
+                for (int a = 0; a < 3; a++) {
+                    endSum += parseVal(getArrowScore(s, e, a));
+                }
+                if (endsViews[s][e] != null) endsViews[s][e].setText("" + endSum);
+                turnSum += endSum;
+            }
+            if (turnsViews[s][t] != null) {
+                String labelStr = (t < 2) ? "Totaal testbeurt " + (t + 1) + ": " : "Totaal beurt " + (t - 1) + ": ";
+                turnsViews[s][t].setText(labelStr + turnSum + " / 120");
+            }
+            if (t >= 2) compTotal += turnSum;
+        }
+        if (grandViews[s] != null) grandViews[s].setText("EINDTOTAAL: " + compTotal + " / 480");
+    }
+
+    void updateLeaderboard() {
+        if (rankView == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format(Locale.ROOT, "%-12s %5s\n", "Schutter", "Totaal"));
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            if (name.length() > 12) name = name.substring(0, 12);
+
+            int compTotal = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) {
+                        compTotal += parseVal(getArrowScore(s, e, a));
+                    }
+                }
+            }
+            sb.append(String.format(Locale.ROOT, "%-12s %5d\n", name, compTotal));
+        }
+
+        rankView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        rankView.setText(sb.toString());
+    }
+
+    void triggerPdfExport() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
+        startActivityForResult(intent, 2002);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 2002 && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try {
+                OutputStream out = getContentResolver().openOutputStream(data.getData());
+                if (out != null) {
+                    writePdf(out);
+                    out.close();
+                    Toast.makeText(this, "PDF succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Export mislukt: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    void shareViaIntent() {
+        StringBuilder sb = new StringBuilder("🏹 Recurve Score Uitslag:\n\n");
+        for (int s = 0; s < numShooters; s++) {
+            int total = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
+                }
+            }
+            sb.append(getShooterName(s)).append(": ").append(total).append(" / 480 punten\n");
+        }
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, sb.toString());
+        startActivity(Intent.createChooser(shareIntent, "Deel uitslag via"));
+    }
+
+    void writePdf(OutputStream output) throws IOException {
+        PdfDocument pdf = new PdfDocument();
+        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(595, 842, 1).create();
+        PdfDocument.Page page = pdf.startPage(pageInfo);
+
+        android.graphics.Canvas canvas = page.getCanvas();
+        Paint paint = new Paint();
+        paint.setColor(Color.BLACK);
+        paint.setTextSize(14);
+
+        int y = 40;
+        canvas.drawText("Recurve Score - Wedstrijduitslag", 40, y, paint);
+        y += 30;
+
+        for (int s = 0; s < numShooters; s++) {
+            int total = 0;
+            for (int t = 2; t < 6; t++) {
+                for (int e = t * 4; e < t * 4 + 4; e++) {
+                    for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
+                }
+            }
+            canvas.drawText("Schutter: " + getShooterName(s) + " - Totaal: " + total + " / 480", 40, y, paint);
+            y += 25;
+        }
+
+        pdf.finishPage(page);
+        pdf.writeTo(output);
+        pdf.close();
+    }
+
+    static class DatabaseHelper extends SQLiteOpenHelper {
+        private static final String DATABASE_NAME = "recurve_scores.db";
+        private static final int DATABASE_VERSION = 1;
+
+        DatabaseHelper(Context context) {
+            super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        }
+
+        @Override
+        public void onCreate(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, shooters_count INTEGER);");
+            db.execSQL("CREATE TABLE shooters (match_id INTEGER, shooter_index INTEGER, name TEXT);");
+            db.execSQL("CREATE TABLE scores (match_id INTEGER, shooter_index INTEGER, end_index INTEGER, arrow_index INTEGER, score TEXT);");
+        }
+
+        @Override
+        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            db.execSQL("DROP TABLE IF EXISTS matches");
+            db.execSQL("DROP TABLE IF EXISTS shooters");
+            db.execSQL("DROP TABLE IF EXISTS scores");
+            onCreate(db);
+        }
+    }
+}
