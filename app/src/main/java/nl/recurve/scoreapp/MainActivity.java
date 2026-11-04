@@ -586,8 +586,9 @@ public class MainActivity extends Activity {
 
         for (int s = 0; s < numShooters; s++) {
             String name = getShooterName(s);
-            for (int t = 0; t < 6; t++) {
-                String turnLabel = (t < 2) ? "Testbeurt " + (t + 1) : "Wedstrijdbeurt " + (t - 1);
+            // Sla testbeurten (t = 0 en 1) over in de export indien gewenst, of neem enkel wedstrijdbeurten (t = 2 t/m 5) mee
+            for (int t = 2; t < 6; t++) {
+                String turnLabel = "Wedstrijdbeurt " + (t - 1);
                 for (int e = 0; e < 4; e++) {
                     int fix = t * 4 + e;
                     String p1 = getArrowScore(s, fix, 0);
@@ -633,7 +634,6 @@ public class MainActivity extends Activity {
     void writePdf(OutputStream output) throws IOException {
         PdfDocument pdf = new PdfDocument();
         
-        // Haal de datum van de wedstrijd op uit de database
         String matchDate = "";
         SQLiteDatabase dbRead = dbHelper.getReadableDatabase();
         Cursor c = dbRead.rawQuery("SELECT date FROM matches WHERE id = ?", new String[]{String.valueOf(currentMatchId)});
@@ -644,8 +644,9 @@ public class MainActivity extends Activity {
 
         int pageWidth = 842;  // A4 Landschap breedte
         int pageHeight = 595; // A4 Landschap hoogte
-        int margin = 35;
-        int usableWidth = pageWidth - (2 * margin);
+        int leftMargin = 30;
+        int rightMargin = 30;
+        int usableWidth = pageWidth - leftMargin - rightMargin;
         
         int shootersPerPage = 4;
         int totalPages = (int) Math.ceil((double) numShooters / shootersPerPage);
@@ -662,70 +663,89 @@ public class MainActivity extends Activity {
             paint.setTextSize(15);
             paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             String titleStr = "Recurve Score - Wedstrijduitslag" + (matchDate.isEmpty() ? "" : " (" + matchDate + ")");
-            canvas.drawText(titleStr, margin, 35, paint);
+            canvas.drawText(titleStr, leftMargin, 32, paint);
 
             int startShooter = pageIdx * shootersPerPage;
             int endShooter = Math.min(startShooter + shootersPerPage, numShooters);
             int columnCount = endShooter - startShooter;
             if (columnCount <= 0) columnCount = 1;
 
-            int columnWidth = usableWidth / columnCount;
-            int topMargin = 65;
+            // Vaste linkerkolom voor de beurt/end labels, resterende breedte verdeeld over de spelers
+            int labelColWidth = 110;
+            int playerColWidth = (usableWidth - labelColWidth) / columnCount;
+            int topMargin = 60;
 
+            // 1. Teken de linkerlabelskolom (Beurten en Ends)
+            int labelY = topMargin + 18;
+            paint.setTextSize(10);
+            paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+
+            for (int t = 2; t < 6; t++) {
+                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText("Wedstrijdbeurt " + (t - 1), leftMargin, labelY, paint);
+                labelY += 15;
+
+                paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+                for (int e = 0; e < 4; e++) {
+                    canvas.drawText("  E" + (e + 1) + " (P1 P2 P3):", leftMargin, labelY, paint);
+                    labelY += 14;
+                }
+                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText("  Subtotaal:", leftMargin, labelY, paint);
+                labelY += 22;
+            }
+            canvas.drawText("EINDTOTAAL (/480):", leftMargin, labelY + 5, paint);
+
+            // 2. Teken per speler de gegevens in een eigen kolom
             for (int i = 0; i < columnCount; i++) {
                 int sIndex = startShooter + i;
                 String shooterName = getShooterName(sIndex);
-                int colLeft = margin + (i * columnWidth) + 5;
+                if (shooterName.length() > 14) shooterName = shooterName.substring(0, 14);
+
+                int colLeft = leftMargin + labelColWidth + (i * playerColWidth);
                 int currentY = topMargin;
 
                 // Schutternaam als kolomkop
-                paint.setTextSize(13);
+                paint.setTextSize(12);
                 paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                canvas.drawText("Schutter: " + shooterName, colLeft, currentY, paint);
+                canvas.drawText(shooterName, colLeft + 5, currentY, paint);
                 currentY += 18;
 
                 paint.setTextSize(10);
-                paint.setTypeface(android.graphics.Typeface.DEFAULT);
-
                 int compTotal = 0;
 
-                // Loop door beurten (0-1 test, 2-5 wedstrijdbeurten 1 t/m 4)
-                for (int t = 0; t < 6; t++) {
-                    String tName = (t < 2) ? "Testbeurt " + (t + 1) : "Wedstrijdbeurt " + (t - 1);
-                    paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                    canvas.drawText(tName, colLeft, currentY, paint);
-                    currentY += 14;
-
-                    paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+                // Loop door de 4 wedstrijdbeurten (t = 2 t/m 5) zonder testbeurten
+                for (int t = 2; t < 6; t++) {
+                    currentY += 15; // Ruimte voor de beurt-titel uit de linkerkolom
                     int turnSum = 0;
+
                     for (int e = t * 4; e < t * 4 + 4; e++) {
-                        StringBuilder endLine = new StringBuilder("E" + (e % 4 + 1) + ": ");
+                        StringBuilder scoreLine = new StringBuilder();
                         int endSum = 0;
                         for (int a = 0; a < 3; a++) {
                             String score = getArrowScore(sIndex, e, a);
                             if (score.isEmpty()) score = "-";
-                            endLine.append(score).append(" ");
+                            scoreLine.append(score).append("  ");
                             endSum += parseVal(score);
                         }
-                        endLine.append("= ").append(endSum);
-                        canvas.drawText(endLine.toString(), colLeft + 5, currentY, paint);
-                        currentY += 13;
+                        scoreLine.append("= ").append(endSum);
+                        
+                        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+                        canvas.drawText(scoreLine.toString(), colLeft + 5, currentY, paint);
+                        currentY += 14;
                         turnSum += endSum;
                     }
 
                     paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                    canvas.drawText("Subtotaal: " + turnSum + (t < 2 ? " (test)" : " / 120"), colLeft + 5, currentY, paint);
-                    currentY += 18;
-
-                    if (t >= 2) {
-                        compTotal += turnSum;
-                    }
+                    canvas.drawText(turnSum + " / 120", colLeft + 5, currentY, paint);
+                    currentY += 22;
+                    compTotal += turnSum;
                 }
 
                 currentY += 5;
                 paint.setTextSize(11);
                 paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-                canvas.drawText("TOTAAL: " + compTotal + " / 480", colLeft, currentY, paint);
+                canvas.drawText(compTotal + " pts", colLeft + 5, currentY, paint);
             }
 
             pdf.finishPage(page);
