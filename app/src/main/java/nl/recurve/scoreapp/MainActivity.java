@@ -14,6 +14,7 @@ import android.graphics.Paint;
 import java.util.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.*;
 
 public class MainActivity extends Activity {
     DatabaseHelper dbHelper;
@@ -243,11 +244,21 @@ public class MainActivity extends Activity {
         body.setOrientation(1);
         root.addView(body, lp());
 
-        Button exportPdf = createStyledButton("📄 Exporteer als PDF", navyColor, Color.WHITE);
-        LinearLayout.LayoutParams bLp = lp();
-        bLp.setMargins(0, dp(10), 0, dp(10));
-        exportPdf.setOnClickListener(v -> triggerPdfExport());
-        root.addView(exportPdf, bLp);
+        LinearLayout btnLayout = new LinearLayout(this);
+        btnLayout.setOrientation(0);
+        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, -2, 1);
+        bLp.setMargins(0, dp(10), dp(4), dp(10));
+
+        Button exportExcel = createStyledButton("📊 Excel", navyColor, Color.WHITE);
+        exportExcel.setOnClickListener(v -> triggerFileExport("xlsx"));
+        btnLayout.addView(exportExcel, bLp);
+
+        Button exportPdf = createStyledButton("📄 PDF", navyColor, Color.WHITE);
+        LinearLayout.LayoutParams bLp2 = new LinearLayout.LayoutParams(0, -2, 1);
+        bLp2.setMargins(dp(4), dp(10), 0, dp(10));
+        exportPdf.setOnClickListener(v -> triggerFileExport("pdf"));
+        btnLayout.addView(exportPdf, bLp2);
+        root.addView(btnLayout);
 
         Button shareBtn = createStyledButton("📲 Deel Resultaten via WhatsApp/Mail", Color.parseColor("#25D366"), Color.WHITE);
         LinearLayout.LayoutParams shLp = lp();
@@ -514,11 +525,19 @@ public class MainActivity extends Activity {
         rankView.setText(sb.toString());
     }
 
-    void triggerPdfExport() {
+    String exportType = "xlsx";
+
+    void triggerFileExport(String type) {
+        exportType = type;
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("application/pdf");
-        intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
+        if (type.equals("xlsx")) {
+            intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.xlsx");
+        } else {
+            intent.setType("application/pdf");
+            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
+        }
         startActivityForResult(intent, 2002);
     }
 
@@ -529,9 +548,10 @@ public class MainActivity extends Activity {
             try {
                 OutputStream out = getContentResolver().openOutputStream(data.getData());
                 if (out != null) {
-                    writePdf(out);
+                    if (exportType.equals("xlsx")) writeExcel(out);
+                    else writePdf(out);
                     out.close();
-                    Toast.makeText(this, "PDF succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Bestand succesvol opgeslagen!", Toast.LENGTH_LONG).show();
                 }
             } catch (Exception e) {
                 Toast.makeText(this, "Export mislukt: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -585,6 +605,56 @@ public class MainActivity extends Activity {
         pdf.finishPage(page);
         pdf.writeTo(output);
         pdf.close();
+    }
+
+    void writeExcel(OutputStream output) throws IOException {
+        ZipOutputStream zip = new ZipOutputStream(output);
+        List<String[]> detail = new ArrayList<>();
+        detail.add(new String[]{"Schutter", "Beurt", "End", "Pijl 1", "Pijl 2", "Pijl 3", "Totaal"});
+
+        for (int s = 0; s < numShooters; s++) {
+            String name = getShooterName(s);
+            for (int e = 0; e < 24; e++) {
+                int turn = e / 4;
+                String[] a = {getArrowScore(s, e, 0), getArrowScore(s, e, 1), getArrowScore(s, e, 2)};
+                int etot = parseVal(a[0]) + parseVal(a[1]) + parseVal(a[2]);
+                detail.add(new String[]{name, String.valueOf(turn + 1), String.valueOf((e % 4) + 1), a[0], a[1], a[2], String.valueOf(etot)});
+            }
+        }
+
+        putZip(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
+        putZip(zip, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
+        putZip(zip, "xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Scores\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+        putZip(zip, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/></Relationships>");
+        putZip(zip, "xl/worksheets/sheet1.xml", sheetXml(detail));
+        zip.finish();
+    }
+
+    void putZip(ZipOutputStream zip, String name, String content) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
+    }
+
+    String sheetXml(List<String[]> rows) {
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
+        for (int r = 0; r < rows.size(); r++) {
+            xml.append("<row r=\"").append(r + 1).append("\">");
+            String[] cells = rows.get(r);
+            for (int c = 0; c < cells.length; c++) {
+                String val = cells[c] == null ? "" : cells[c];
+                String ref = (char) ('A' + c) + "" + (r + 1);
+                if (val.matches("-?\\d+")) {
+                    xml.append("<c r=\"").append(ref).append("\"><v>").append(val).append("</v></c>");
+                } else {
+                    xml.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"><is><t>").append(val).append("</t></is></c>");
+                }
+            }
+            xml.append("</row>");
+        }
+        xml.append("</sheetData></worksheet>");
+        return xml.toString();
     }
 
     static class DatabaseHelper extends SQLiteOpenHelper {
