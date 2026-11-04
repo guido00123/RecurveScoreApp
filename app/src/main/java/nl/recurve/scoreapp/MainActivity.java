@@ -14,7 +14,6 @@ import android.graphics.Paint;
 import java.util.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.zip.*;
 
 public class MainActivity extends Activity {
     DatabaseHelper dbHelper;
@@ -244,21 +243,11 @@ public class MainActivity extends Activity {
         body.setOrientation(1);
         root.addView(body, lp());
 
-        LinearLayout btnLayout = new LinearLayout(this);
-        btnLayout.setOrientation(0);
-        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, -2, 1);
-        bLp.setMargins(0, dp(10), dp(4), dp(10));
-
-        Button exportExcel = createStyledButton("📊 Excel", navyColor, Color.WHITE);
-        exportExcel.setOnClickListener(v -> triggerFileExport("xlsx"));
-        btnLayout.addView(exportExcel, bLp);
-
-        Button exportPdf = createStyledButton("📄 PDF", navyColor, Color.WHITE);
-        LinearLayout.LayoutParams bLp2 = new LinearLayout.LayoutParams(0, -2, 1);
-        bLp2.setMargins(dp(4), dp(10), 0, dp(10));
-        exportPdf.setOnClickListener(v -> triggerFileExport("pdf"));
-        btnLayout.addView(exportPdf, bLp2);
-        root.addView(btnLayout);
+        Button exportPdf = createStyledButton("📄 Exporteer als PDF", navyColor, Color.WHITE);
+        LinearLayout.LayoutParams bLp = lp();
+        bLp.setMargins(0, dp(10), 0, dp(10));
+        exportPdf.setOnClickListener(v -> triggerPdfExport());
+        root.addView(exportPdf, bLp);
 
         Button shareBtn = createStyledButton("📲 Deel Resultaten via WhatsApp/Mail", Color.parseColor("#25D366"), Color.WHITE);
         LinearLayout.LayoutParams shLp = lp();
@@ -266,9 +255,9 @@ public class MainActivity extends Activity {
         shareBtn.setOnClickListener(v -> shareViaIntent());
         root.addView(shareBtn, shLp);
 
-        root.addView(label("Klassement", 18, true));
+        root.addView(label("Klassement (4 Wedstrijdbeurten)", 18, true));
         rankView = new TextView(this);
-        rankView.setTextSize(13);
+        rankView.setTextSize(12);
         rankView.setPadding(dp(12), dp(12), dp(12), dp(12));
         rankView.setBackgroundColor(getCardColor());
         rankView.setTextColor(getTextColor());
@@ -344,7 +333,7 @@ public class MainActivity extends Activity {
         body.addView(nameLayout);
 
         for (int turn = 0; turn < 6; turn++) {
-            String tTitle = (turn < 2) ? "Testbeurt " + (turn + 1) : "Beurt " + (turn - 1);
+            String tTitle = (turn < 2) ? "Testbeurt " + (turn + 1) : "Wedstrijdbeurt " + (turn - 1);
             body.addView(label(tTitle, 16, true));
 
             TableLayout tab = new TableLayout(this);
@@ -493,51 +482,47 @@ public class MainActivity extends Activity {
                 turnSum += endSum;
             }
             if (turnsViews[s][t] != null) {
-                String labelStr = (t < 2) ? "Totaal testbeurt " + (t + 1) + ": " : "Totaal beurt " + (t - 1) + ": ";
+                String labelStr = (t < 2) ? "Totaal testbeurt " + (t + 1) + ": " : "Totaal wedstrijdbeurt " + (t - 1) + ": ";
                 turnsViews[s][t].setText(labelStr + turnSum + " / 120");
             }
             if (t >= 2) compTotal += turnSum;
         }
-        if (grandViews[s] != null) grandViews[s].setText("EINDTOTAAL: " + compTotal + " / 480");
+        if (grandViews[s] != null) {
+            grandViews[s].setText("EINDTOTAAL (4 Wedstrijdbeurten): " + compTotal + " / 480");
+        }
     }
 
     void updateLeaderboard() {
         if (rankView == null) return;
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format(Locale.ROOT, "%-12s %5s\n", "Schutter", "Totaal"));
+        // Duidelijke koptekst voor het overzicht per schutter en per beurt
+        sb.append(String.format(Locale.ROOT, "%-10s | B1 | B2 | B3 | B4 | TOTAAL\n", "Schutter"));
+        sb.append("--------------------------------------------\n");
 
         for (int s = 0; s < numShooters; s++) {
             String name = getShooterName(s);
-            if (name.length() > 12) name = name.substring(0, 12);
+            if (name.length() > 9) name = name.substring(0, 9);
 
-            int compTotal = 0;
-            for (int t = 2; t < 6; t++) {
-                for (int e = t * 4; e < t * 4 + 4; e++) {
-                    for (int a = 0; a < 3; a++) {
-                        compTotal += parseVal(getArrowScore(s, e, a));
-                    }
-                }
-            }
-            sb.append(String.format(Locale.ROOT, "%-12s %5d\n", name, compTotal));
+            int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
+            // Wedstrijdbeurten lopen van t = 2 t/m 5
+            for (int e = 8; e < 12; e++) for (int a = 0; a < 3; a++) b1 += parseVal(getArrowScore(s, e, a));
+            for (int e = 12; e < 16; e++) for (int a = 0; a < 3; a++) b2 += parseVal(getArrowScore(s, e, a));
+            for (int e = 16; e < 20; e++) for (int a = 0; a < 3; a++) b3 += parseVal(getArrowScore(s, e, a));
+            for (int e = 20; e < 24; e++) for (int a = 0; a < 3; a++) b4 += parseVal(getArrowScore(s, e, a));
+
+            int compTotal = b1 + b2 + b3 + b4;
+            sb.append(String.format(Locale.ROOT, "%-10s | %2d | %2d | %2d | %2d |  %3d\n", name, b1, b2, b3, b4, compTotal));
         }
 
         rankView.setTypeface(android.graphics.Typeface.MONOSPACE);
         rankView.setText(sb.toString());
     }
 
-    String exportType = "xlsx";
-
-    void triggerFileExport(String type) {
-        exportType = type;
+    void triggerPdfExport() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        if (type.equals("xlsx")) {
-            intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.xlsx");
-        } else {
-            intent.setType("application/pdf");
-            intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
-        }
+        intent.setType("application/pdf");
+        intent.putExtra(Intent.EXTRA_TITLE, "RecurveScore.pdf");
         startActivityForResult(intent, 2002);
     }
 
@@ -548,10 +533,9 @@ public class MainActivity extends Activity {
             try {
                 OutputStream out = getContentResolver().openOutputStream(data.getData());
                 if (out != null) {
-                    if (exportType.equals("xlsx")) writeExcel(out);
-                    else writePdf(out);
+                    writePdf(out);
                     out.close();
-                    Toast.makeText(this, "Bestand succesvol opgeslagen!", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "PDF succesvol opgeslagen!", Toast.LENGTH_LONG).show();
                 }
             } catch (Exception e) {
                 Toast.makeText(this, "Export mislukt: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -560,7 +544,7 @@ public class MainActivity extends Activity {
     }
 
     void shareViaIntent() {
-        StringBuilder sb = new StringBuilder("🏹 Recurve Score Uitslag:\n\n");
+        StringBuilder sb = new StringBuilder("🏹 Recurve Score Uitslag (4 Wedstrijdbeurten):\n\n");
         for (int s = 0; s < numShooters; s++) {
             int total = 0;
             for (int t = 2; t < 6; t++) {
@@ -598,63 +582,13 @@ public class MainActivity extends Activity {
                     for (int a = 0; a < 3; a++) total += parseVal(getArrowScore(s, e, a));
                 }
             }
-            canvas.drawText("Schutter: " + getShooterName(s) + " - Totaal: " + total + " / 480", 40, y, paint);
+            canvas.drawText("Schutter: " + getShooterName(s) + " - Totaal (4 Beurten): " + total + " / 480", 40, y, paint);
             y += 25;
         }
 
         pdf.finishPage(page);
         pdf.writeTo(output);
         pdf.close();
-    }
-
-    void writeExcel(OutputStream output) throws IOException {
-        ZipOutputStream zip = new ZipOutputStream(output);
-        List<String[]> detail = new ArrayList<>();
-        detail.add(new String[]{"Schutter", "Beurt", "End", "Pijl 1", "Pijl 2", "Pijl 3", "Totaal"});
-
-        for (int s = 0; s < numShooters; s++) {
-            String name = getShooterName(s);
-            for (int e = 0; e < 24; e++) {
-                int turn = e / 4;
-                String[] a = {getArrowScore(s, e, 0), getArrowScore(s, e, 1), getArrowScore(s, e, 2)};
-                int etot = parseVal(a[0]) + parseVal(a[1]) + parseVal(a[2]);
-                detail.add(new String[]{name, String.valueOf(turn + 1), String.valueOf((e % 4) + 1), a[0], a[1], a[2], String.valueOf(etot)});
-            }
-        }
-
-        putZip(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
-        putZip(zip, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
-        putZip(zip, "xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Scores\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
-        putZip(zip, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/></Relationships>");
-        putZip(zip, "xl/worksheets/sheet1.xml", sheetXml(detail));
-        zip.finish();
-    }
-
-    void putZip(ZipOutputStream zip, String name, String content) throws IOException {
-        zip.putNextEntry(new ZipEntry(name));
-        zip.write(content.getBytes(StandardCharsets.UTF_8));
-        zip.closeEntry();
-    }
-
-    String sheetXml(List<String[]> rows) {
-        StringBuilder xml = new StringBuilder();
-        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
-        for (int r = 0; r < rows.size(); r++) {
-            xml.append("<row r=\"").append(r + 1).append("\">");
-            String[] cells = rows.get(r);
-            for (int c = 0; c < cells.length; c++) {
-                String val = cells[c] == null ? "" : cells[c];
-                String ref = (char) ('A' + c) + "" + (r + 1);
-                if (val.matches("-?\\d+")) {
-                    xml.append("<c r=\"").append(ref).append("\"><v>").append(val).append("</v></c>");
-                } else {
-                    xml.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"><is><t>").append(val).append("</t></is></c>");
-                }
-            }
-            xml.append("</row>");
-        }
-        xml.append("</sheetData></worksheet>");
-        return xml.toString();
     }
 
     static class DatabaseHelper extends SQLiteOpenHelper {
