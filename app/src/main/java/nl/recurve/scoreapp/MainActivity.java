@@ -572,27 +572,40 @@ public class MainActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">\n");
-        sb.append("<Worksheet ss:Name=\"Scores\">\n<Table>\n");
+        sb.append("<Worksheet ss:Name=\"Gedetailleerde Scores\">\n<Table>\n");
         
-        sb.append("<Row><Cell><Data ss:Type=\"String\">Schutter</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 1</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 2</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 3</Data></Cell><Cell><Data ss:Type=\"String\">Beurt 4</Data></Cell><Cell><Data ss:Type=\"String\">Totaal</Data></Cell></Row>\n");
+        sb.append("<Row>");
+        sb.append("<Cell><Data ss:Type=\"String\">Schutter</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">Beurt</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">End</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">Pijl 1</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">Pijl 2</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">Pijl 3</Data></Cell>");
+        sb.append("<Cell><Data ss:Type=\"String\">End Totaal</Data></Cell>");
+        sb.append("</Row>\n");
 
         for (int s = 0; s < numShooters; s++) {
             String name = getShooterName(s);
-            int b1 = 0, b2 = 0, b3 = 0, b4 = 0;
-            for (int e = 8; e < 12; e++) for (int a = 0; a < 3; a++) b1 += parseVal(getArrowScore(s, e, a));
-            for (int e = 12; e < 16; e++) for (int a = 0; a < 3; a++) b2 += parseVal(getArrowScore(s, e, a));
-            for (int e = 16; e < 20; e++) for (int a = 0; a < 3; a++) b3 += parseVal(getArrowScore(s, e, a));
-            for (int e = 20; e < 24; e++) for (int a = 0; a < 3; a++) b4 += parseVal(getArrowScore(s, e, a));
-            int total = b1 + b2 + b3 + b4;
+            for (int t = 0; t < 6; t++) {
+                String turnLabel = (t < 2) ? "Testbeurt " + (t + 1) : "Wedstrijdbeurt " + (t - 1);
+                for (int e = 0; e < 4; e++) {
+                    int fix = t * 4 + e;
+                    String p1 = getArrowScore(s, fix, 0);
+                    String p2 = getArrowScore(s, fix, 1);
+                    String p3 = getArrowScore(s, fix, 2);
+                    int endSum = parseVal(p1) + parseVal(p2) + parseVal(p3);
 
-            sb.append("<Row>");
-            sb.append("<Cell><Data ss:Type=\"String\">").append(name).append("</Data></Cell>");
-            sb.append("<Cell><Data ss:Type=\"Number\">").append(b1).append("</Data></Cell>");
-            sb.append("<Cell><Data ss:Type=\"Number\">").append(b2).append("</Data></Cell>");
-            sb.append("<Cell><Data ss:Type=\"Number\">").append(b3).append("</Data></Cell>");
-            sb.append("<Cell><Data ss:Type=\"Number\">").append(b4).append("</Data></Cell>");
-            sb.append("<Cell><Data ss:Type=\"Number\">").append(total).append("</Data></Cell>");
-            sb.append("</Row>\n");
+                    sb.append("<Row>");
+                    sb.append("<Cell><Data ss:Type=\"String\">").append(name).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"String\">").append(turnLabel).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"Number\">").append(e + 1).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"String\">").append(p1.isEmpty() ? "-" : p1).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"String\">").append(p2.isEmpty() ? "-" : p2).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"String\">").append(p3.isEmpty() ? "-" : p3).append("</Data></Cell>");
+                    sb.append("<Cell><Data ss:Type=\"Number\">").append(endSum).append("</Data></Cell>");
+                    sb.append("</Row>\n");
+                }
+            }
         }
 
         sb.append("</Table>\n</Worksheet>\n</Workbook>");
@@ -619,58 +632,105 @@ public class MainActivity extends Activity {
 
     void writePdf(OutputStream output) throws IOException {
         PdfDocument pdf = new PdfDocument();
-        // A4 landschap afmetingen (842 x 595 pixels) om voldoende ruimte te bieden voor kolommen
-        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(842, 595, 1).create();
-        PdfDocument.Page page = pdf.startPage(pageInfo);
+        
+        // Haal de datum van de wedstrijd op uit de database
+        String matchDate = "";
+        SQLiteDatabase dbRead = dbHelper.getReadableDatabase();
+        Cursor c = dbRead.rawQuery("SELECT date FROM matches WHERE id = ?", new String[]{String.valueOf(currentMatchId)});
+        if (c.moveToFirst()) {
+            matchDate = c.getString(0);
+        }
+        c.close();
 
-        android.graphics.Canvas canvas = page.getCanvas();
-        Paint paint = new Paint();
-        paint.setColor(Color.BLACK);
-        paint.setTextSize(14);
-        paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        int pageWidth = 842;  // A4 Landschap breedte
+        int pageHeight = 595; // A4 Landschap hoogte
+        int margin = 35;
+        int usableWidth = pageWidth - (2 * margin);
+        
+        int shootersPerPage = 4;
+        int totalPages = (int) Math.ceil((double) numShooters / shootersPerPage);
+        if (totalPages == 0) totalPages = 1;
 
-        int y = 40;
-        canvas.drawText("Recurve Score - Gedetailleerd Wedstrijdoverzicht", 40, y, paint);
-        y += 30;
+        for (int pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+            PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageIdx + 1).create();
+            PdfDocument.Page page = pdf.startPage(pageInfo);
+            android.graphics.Canvas canvas = page.getCanvas();
+            Paint paint = new Paint();
 
-        // Tabelkop (Schutter + 4 Wedstrijdbeurten + Totaal)
-        paint.setTextSize(12);
-        canvas.drawText(String.format(Locale.ROOT, "%-15s | B1 (P1 P2 P3) | B2 (P1 P2 P3) | B3 (P1 P2 P3) | B4 (P1 P2 P3) | TOTAAL", "Schutter"), 40, y, paint);
-        y += 8;
-        canvas.drawText("-----------------------------------------------------------------------------------------------------------------------------------", 40, y, paint);
-        y += 20;
+            // Titel met datum
+            paint.setColor(Color.BLACK);
+            paint.setTextSize(15);
+            paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            String titleStr = "Recurve Score - Wedstrijduitslag" + (matchDate.isEmpty() ? "" : " (" + matchDate + ")");
+            canvas.drawText(titleStr, margin, 35, paint);
 
-        paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+            int startShooter = pageIdx * shootersPerPage;
+            int endShooter = Math.min(startShooter + shootersPerPage, numShooters);
+            int columnCount = endShooter - startShooter;
+            if (columnCount <= 0) columnCount = 1;
 
-        for (int s = 0; s < numShooters; s++) {
-            String name = getShooterName(s);
-            if (name.length() > 14) name = name.substring(0, 14);
+            int columnWidth = usableWidth / columnCount;
+            int topMargin = 65;
 
-            int compTotal = 0;
-            StringBuilder rowStr = new StringBuilder(String.format(Locale.ROOT, "%-15s | ", name));
+            for (int i = 0; i < columnCount; i++) {
+                int sIndex = startShooter + i;
+                String shooterName = getShooterName(sIndex);
+                int colLeft = margin + (i * columnWidth) + 5;
+                int currentY = topMargin;
 
-            // Loop door de 4 wedstrijdbeurten (t = 2 t/m 5)
-            for (int t = 2; t < 6; t++) {
-                int turnSum = 0;
-                StringBuilder arrowsStr = new StringBuilder();
-                for (int e = t * 4; e < t * 4 + 4; e++) {
-                    for (int a = 0; a < 3; a++) {
-                        String score = getArrowScore(s, e, a);
-                        if (score.isEmpty()) score = "-";
-                        arrowsStr.append(score).append(" ");
-                        turnSum += parseVal(score);
+                // Schutternaam als kolomkop
+                paint.setTextSize(13);
+                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText("Schutter: " + shooterName, colLeft, currentY, paint);
+                currentY += 18;
+
+                paint.setTextSize(10);
+                paint.setTypeface(android.graphics.Typeface.DEFAULT);
+
+                int compTotal = 0;
+
+                // Loop door beurten (0-1 test, 2-5 wedstrijdbeurten 1 t/m 4)
+                for (int t = 0; t < 6; t++) {
+                    String tName = (t < 2) ? "Testbeurt " + (t + 1) : "Wedstrijdbeurt " + (t - 1);
+                    paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    canvas.drawText(tName, colLeft, currentY, paint);
+                    currentY += 14;
+
+                    paint.setTypeface(android.graphics.Typeface.MONOSPACE);
+                    int turnSum = 0;
+                    for (int e = t * 4; e < t * 4 + 4; e++) {
+                        StringBuilder endLine = new StringBuilder("E" + (e % 4 + 1) + ": ");
+                        int endSum = 0;
+                        for (int a = 0; a < 3; a++) {
+                            String score = getArrowScore(sIndex, e, a);
+                            if (score.isEmpty()) score = "-";
+                            endLine.append(score).append(" ");
+                            endSum += parseVal(score);
+                        }
+                        endLine.append("= ").append(endSum);
+                        canvas.drawText(endLine.toString(), colLeft + 5, currentY, paint);
+                        currentY += 13;
+                        turnSum += endSum;
+                    }
+
+                    paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    canvas.drawText("Subtotaal: " + turnSum + (t < 2 ? " (test)" : " / 120"), colLeft + 5, currentY, paint);
+                    currentY += 18;
+
+                    if (t >= 2) {
+                        compTotal += turnSum;
                     }
                 }
-                compTotal += turnSum;
-                rowStr.append(String.format(Locale.ROOT, "%-12s | ", arrowsStr.toString().trim()));
-            }
-            rowStr.append(String.format(Locale.ROOT, "%3d / 480", compTotal));
 
-            canvas.drawText(rowStr.toString(), 40, y, paint);
-            y += 25;
+                currentY += 5;
+                paint.setTextSize(11);
+                paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                canvas.drawText("TOTAAL: " + compTotal + " / 480", colLeft, currentY, paint);
+            }
+
+            pdf.finishPage(page);
         }
 
-        pdf.finishPage(page);
         pdf.writeTo(output);
         pdf.close();
     }
