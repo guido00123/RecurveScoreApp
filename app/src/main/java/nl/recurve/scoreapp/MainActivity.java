@@ -21,10 +21,8 @@ public class MainActivity extends Activity {
     long currentMatchId = -1;
     int numShooters = 4;
     
-    // Thema instellingen (Licht / Donker)
     boolean isDarkMode = false;
 
-    // Kleurenpalet gebaseerd op Material Design 3 (Licht & Donker)
     int navyColor = Color.rgb(31, 78, 121);
     int paleColor = Color.rgb(221, 235, 247);
 
@@ -76,7 +74,6 @@ public class MainActivity extends Activity {
         return btn;
     }
 
-    // ==================== 1. HOOFDSCHERM (HISTORIE & NIEUWE WEDSTRIJD) ====================
     void showHomeView() {
         ScrollView sc = new ScrollView(this);
         root = new LinearLayout(this);
@@ -142,7 +139,6 @@ public class MainActivity extends Activity {
         cursor.close();
     }
 
-    // ==================== 2. CONFIGURATIE SCHERM ====================
     void showConfigView() {
         ScrollView sc = new ScrollView(this);
         root = new LinearLayout(this);
@@ -205,7 +201,6 @@ public class MainActivity extends Activity {
         root.addView(backBtn, lp());
     }
 
-    // ==================== 3. SCORE INVOER SCHERM ====================
     Spinner picker;
     LinearLayout body;
     int selectedShooter = 0;
@@ -458,7 +453,6 @@ public class MainActivity extends Activity {
         return t;
     }
 
-    // ==================== DATABASE HELPERS ====================
     String getShooterName(int sIndex) {
         SQLiteDatabase db = dbHelper.getReadableDatabase();
         Cursor c = db.rawQuery("SELECT name FROM shooters WHERE match_id = ? AND shooter_index = ?", new String[]{String.valueOf(currentMatchId), String.valueOf(sIndex)});
@@ -546,7 +540,6 @@ public class MainActivity extends Activity {
         rankView.setText(sb.toString());
     }
 
-    // ==================== EXPORT & SHARING ====================
     String exportType = "xlsx";
 
     void triggerFileExport(String type) {
@@ -647,4 +640,19 @@ public class MainActivity extends Activity {
         putZip(zip, "[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/><Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/></Types>");
         putZip(zip, "_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>");
         putZip(zip, "xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Scores\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
-        putZip(zip, "xl/_rels/workbook.xml.rels", "<?xml version=\"1
+        putZip(zip, "xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/></Relationships>");
+        putZip(zip, "xl/worksheets/sheet1.xml", sheetXml(detail));
+        zip.finish();
+    }
+
+    void putZip(ZipOutputStream zip, String name, String content) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
+    }
+
+    String sheetXml(List<String[]> rows) {
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
+        for (int r = 0; r < rows.size(); r++) {
+            xml
